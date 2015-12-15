@@ -29,6 +29,7 @@ Rect findSingleBestAttribute(vector<Rect> attributes, float avgX, float avgY, fl
 Rect getAvgAttribute(vector<Rect> attributes);
 vector<float> determineAngle(vector<float> configuration, vector<float> nosePositions, vector<float> mouthPositions);
 float determineDistance(vector<float> configuration, Rect face);
+vector<float> parseConfigFile(String fileName);
 
 /** Global variables */
 
@@ -39,6 +40,7 @@ float NOSE_STANDARD_DEVIATIONS = 2.0;
 String face_cascade_name = "C:/opencv/opencv/sources/data/haarcascades/haarcascade_frontalface_alt.xml";
 String mouth_cascade_name = "C:/opencv/opencv/sources/data/haarcascades/mouth.xml";
 String nose_cascade_name = "C:/opencv/opencv/sources/data/haarcascades/nose.xml";
+String CONFIG_FILE = "C:/Users/Evan/Desktop/configuration.txt";
 CascadeClassifier face_cascade, mouth_cascade, nose_cascade;
 
 
@@ -117,13 +119,17 @@ void detectAndDisplay(Mat frame)
 		Rect bestMouth = determineCorrectMouth(mouths, faces[i]);
 		mouthPositions = displayMouth(bestMouth, frame, faces[i]);
 
-		
+		/*
 		vector<float> configuration{	0.45f, 0.0f,0.4f,0.0f,
 										0.32f, 0.52f,0.34f,0.7f,
 										0.24f, 0.0f,0.29f,0.0f,
 										0.0f,0.57f,0.0f,0.8f,
 										0.0f,0.3f,0.0f,0.6f,
 										200.0f };
+		
+		*/
+		vector<float> configuration = parseConfigFile(CONFIG_FILE);
+		
 		//calculate yaw and pitch rotations
 		vector<float> angles = determineAngle(configuration, nosePositions, mouthPositions);
 
@@ -135,6 +141,31 @@ void detectAndDisplay(Mat frame)
 		cout << "Pitch: " << angles[1] << endl;
 	}
 	imshow(window_name, frame);
+}
+
+
+vector<float> parseConfigFile(String fileName) {
+	ifstream myFile;
+	myFile.open(fileName);
+	vector<float> configuration;
+	std::string line;
+	while (getline(myFile, line)) {
+		std::istringstream iss(line);
+		float noseX, noseY, mouthX, mouthY, width;
+		if (iss >> width) {
+			configuration.push_back(width);
+		}
+		else { break; }
+
+		if (iss >> noseY >> mouthX >> mouthY) {
+			configuration.push_back(noseY);
+			configuration.push_back(mouthX);
+			configuration.push_back(mouthY);
+		}
+		else { break; }
+	}
+	return configuration;
+
 }
 
 //Using initial configurations, determines how far away the face is from the camera
@@ -276,7 +307,7 @@ Rect determineCorrectMouth(vector<Rect> mouths, Rect face) {
 //detect all of the noses within the face
 vector<Rect> detectNoses(Mat faceROI, Rect face) {
 	vector<Rect> noses;
-	nose_cascade.detectMultiScale(faceROI, noses, 1.1, 0, 0 | CASCADE_SCALE_IMAGE, Size(face.width / 5.0, face.width / 5.0), Size(face.width / 3.0, face.width / 3.0));
+	nose_cascade.detectMultiScale(faceROI, noses, 1.1, 0, 0 | CASCADE_SCALE_IMAGE , Size(face.width / 5.5, face.width / 5.5), Size(face.width / 3.0, face.width / 3.0));
 	return noses;
 }
 
