@@ -34,7 +34,7 @@ float determineDistance(vector<float> configuration, Rect face);
 
 string window_name = "Capture - Face detection";
 RNG rng(12345);
-float MOUTH_STANDARD_DEVIATIONS = 2.0; 
+float MOUTH_STANDARD_DEVIATIONS = 2.0;
 float NOSE_STANDARD_DEVIATIONS = 2.0;
 String face_cascade_name = "C:/opencv/opencv/sources/data/haarcascades/haarcascade_frontalface_alt.xml";
 String mouth_cascade_name = "C:/opencv/opencv/sources/data/haarcascades/mouth.xml";
@@ -44,28 +44,29 @@ CascadeClassifier face_cascade, mouth_cascade, nose_cascade;
 
 /*
 Runs the program. Takes the camera input and determines
-	1. If there is a face in the shot
-	2. If so, finds
-		a. the face's distance from the camera
-		b. yaw rotation
-		c. pitch rotation
+1. If there is a face in the shot
+2. If so, finds
+a. the face's distance from the camera
+b. yaw rotation
+c. pitch rotation
 */
 int main(int argc, const char** argv)
 {
-	//-- 1. Load the cascades
+	// Load the cascades
 	if (!face_cascade.load(face_cascade_name)) { printf("--(!)Error loading face cascade\n"); return -1; };
 	if (!mouth_cascade.load(mouth_cascade_name)) { printf("--(!)Error loading mouth cascade\n"); return -1; };
 	if (!nose_cascade.load(nose_cascade_name)) { printf("--(!)Error loading nose cascade\n"); return -1; }
 
+	//Open the video stream (0 is the webcam)
 	VideoCapture cap(0);
 
 	if (!cap.isOpened()) {
 		return -1;
 	}
+	//go through 100 frames
 	for (int q = 0; q<100; q++) {
 		Mat frame;
 		cap >> frame;
-		//-- 3. Apply the classifier to the frame
 		if (!frame.empty())
 		{
 			detectAndDisplay(frame);
@@ -74,7 +75,7 @@ int main(int argc, const char** argv)
 		{
 			printf(" --(!) No captured frame -- Break!"); break;
 		}
-		int c = waitKey(10);
+		int c = waitKey(1);
 		if ((char)c == 'c') { break; }
 	}
 	return 0;
@@ -116,17 +117,22 @@ void detectAndDisplay(Mat frame)
 		Rect bestMouth = determineCorrectMouth(mouths, faces[i]);
 		mouthPositions = displayMouth(bestMouth, frame, faces[i]);
 
-		vector<float> configuration{ 0.45f, 0.0f,0.4f,0.0f,
-			0.32f, 0.52f,0.34f,0.7f,
-			0.24f, 0.0f,0.29f,0.0f,
-			0.0f,0.57f,0.0f,0.8f,
-			0.0f,0.38f,0.0f,0.6f,
-			200.0f };
+		
+		vector<float> configuration{	0.45f, 0.0f,0.4f,0.0f,
+										0.32f, 0.52f,0.34f,0.7f,
+										0.24f, 0.0f,0.29f,0.0f,
+										0.0f,0.57f,0.0f,0.8f,
+										0.0f,0.3f,0.0f,0.6f,
+										200.0f };
 		//calculate yaw and pitch rotations
 		vector<float> angles = determineAngle(configuration, nosePositions, mouthPositions);
 
 		//determine how far away the face is to the camera
 		float distance = determineDistance(configuration, faces[i]);
+		
+		cout << "Dist:  " << distance << endl;
+		cout << "Yaw:   " << angles[0] << endl;
+		cout << "Pitch: " << angles[1] << endl;
 	}
 	imshow(window_name, frame);
 }
@@ -160,31 +166,43 @@ vector<float> determineAngle(vector<float> configuration, vector<float> nosePosi
 	float upNoseYConfig = configuration[17]; float upMouthYConfig = configuration[19];
 	float currentNoseY = nosePositions[1]; float currentMouthY = mouthPositions[1];
 
-	float angleFromNose, angleFromMouth, distanceBetween, horizontalAngle, verticalAngle;
+	float yawAngleFromNose, yawAngleFromMouth, distanceBetween, yawAngle, pitchAngle, pitchAngleFromNose, pitchAngleFromMouth;
 	float midAngleValue = 0.0;
-	float leftAngleValue = 60.0;
+	float leftAngleValue = 50.0;
 	float rightAngleValue = -40.0;
 	float downAngleValue = -30.0;
+	float upAngleValue = 50.0;
 
-	//determine horizontal angle
-
+	//determine yaw (horizontal) angle
 	distanceBetween = abs(leftNoseXConfig - midNoseXConfig);
-	angleFromNose = ((1 - ((currentNoseX - midNoseXConfig) / distanceBetween))*midAngleValue) + ((currentNoseX - midNoseXConfig) / distanceBetween)*leftAngleValue;
+	yawAngleFromNose = ((1 - ((currentNoseX - midNoseXConfig) / distanceBetween))*midAngleValue) + ((currentNoseX - midNoseXConfig) / distanceBetween)*leftAngleValue;
 
 	distanceBetween = abs(leftMouthXConfig - midMouthXConfig);
-	angleFromMouth = ((1 - ((currentMouthX - midNoseXConfig) / distanceBetween))*midAngleValue) + ((currentMouthX - midNoseXConfig) / distanceBetween)*leftAngleValue;
-	if (currentNoseX==0 && currentNoseY==0) {
-		//no nose was detected
-		horizontalAngle = angleFromMouth;
+	yawAngleFromMouth = ((1 - ((currentMouthX - midMouthXConfig) / distanceBetween))*midAngleValue) + ((currentMouthX - midMouthXConfig) / distanceBetween)*leftAngleValue;
+	
+
+	//determine pitch (vertical) angle
+	if (currentNoseY < midNoseYConfig) {
+		distanceBetween = abs(upNoseYConfig - midNoseYConfig);
+		pitchAngleFromNose = ((1 - (abs(currentNoseY - midNoseYConfig) / distanceBetween))*midAngleValue) + (abs(currentNoseY - midNoseYConfig) / distanceBetween)*upAngleValue;
 	}
-	horizontalAngle = angleFromNose;
-
-	//determine vertical angle
-
-	distanceBetween = abs(downNoseYConfig - midNoseYConfig);
-	verticalAngle = ((1 - ((currentNoseY - midNoseYConfig) / distanceBetween))*midAngleValue) + ((currentNoseY - midNoseYConfig) / distanceBetween)*downAngleValue;
-
-	return {horizontalAngle, verticalAngle};
+	else {
+		distanceBetween = abs(downNoseYConfig - midNoseYConfig);
+		pitchAngleFromNose = ((1 - (abs(currentNoseY - midNoseYConfig) / distanceBetween))*midAngleValue) + (abs(currentNoseY - midNoseYConfig) / distanceBetween)*downAngleValue;
+	}
+	distanceBetween = abs(downMouthYConfig - midMouthYConfig);
+	pitchAngleFromMouth = ((1 - ((currentMouthY - midMouthYConfig) / distanceBetween))*midAngleValue) + ((currentMouthY - midMouthYConfig) / distanceBetween)*downAngleValue;
+	
+	if (currentNoseX == 0 && currentNoseY == 0) {
+		//no nose was detected
+		yawAngle = yawAngleFromMouth;
+		pitchAngle = pitchAngleFromMouth;
+	}
+	else {
+		yawAngle = yawAngleFromNose;
+		pitchAngle = pitchAngleFromNose;
+	}
+	return{ yawAngle, pitchAngle };
 
 }
 
@@ -258,14 +276,14 @@ Rect determineCorrectMouth(vector<Rect> mouths, Rect face) {
 //detect all of the noses within the face
 vector<Rect> detectNoses(Mat faceROI, Rect face) {
 	vector<Rect> noses;
-	nose_cascade.detectMultiScale(faceROI, noses, 1.1, 0, 0 | CASCADE_SCALE_IMAGE, Size(face.width/5.0, face.width/5.0), Size(face.width/3.0, face.width/3.0));
+	nose_cascade.detectMultiScale(faceROI, noses, 1.1, 0, 0 | CASCADE_SCALE_IMAGE, Size(face.width / 5.0, face.width / 5.0), Size(face.width / 3.0, face.width / 3.0));
 	return noses;
 }
 
 //detect all of the mouths within the face
 vector<Rect> detectMouths(Mat faceROI, Rect face) {
 	vector<Rect> mouths;
-	mouth_cascade.detectMultiScale(faceROI, mouths, 1.1, 0, 0 | CASCADE_SCALE_IMAGE, Size(face.width/4.0, face.height/8.0), Size(face.width/2.5, face.height/5.0));
+	mouth_cascade.detectMultiScale(faceROI, mouths, 1.1, 0, 0 | CASCADE_SCALE_IMAGE, Size(face.width / 4.0, face.height / 8.0), Size(face.width / 2.5, face.height / 5.0));
 	//cout << "NUM MOUTHS: " << mouths.size() << endl;
 	return mouths;
 }
@@ -282,7 +300,7 @@ vector<float> displayNose(Rect nose, Mat frame, Rect face) {
 //puts an ellipse in the frame at the location of the mouth
 //returns the location of the mouth with respect to the face
 vector<float> displayMouth(Rect mouth, Mat frame, Rect face) {
-	
+
 	Point mCenter(face.x + mouth.x + mouth.width / 2, face.y + mouth.y + mouth.height / 2);
 	ellipse(frame, mCenter, Size(mouth.width*0.75, mouth.height / 2), 0, 0, 360, Scalar(0, 255, 0), 4, 8, 0);
 	return{ mouth.x / float(face.width) , mouth.y / float(face.height) };
