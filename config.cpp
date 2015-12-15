@@ -4,6 +4,7 @@
 #include "opencv2/videoio.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
+#include "windows.h"
 
 #include <iostream>
 #include <fstream>
@@ -15,18 +16,14 @@ using namespace cv;
 
 /** Function Headers */
 void detectAndDisplay(Mat frame);
-vector<Rect> detectEyes(Mat faceROI, Rect face);
 vector<Rect> detectNoses(Mat faceROI, Rect face);
 vector<Rect> detectMouths(Mat faceROI, Rect face);
 vector<Rect> detectProfiles(Mat frame_gray);
 vector<Rect> detectFaces(Mat frame_gray);
-vector<float> displayEyes(vector<Rect> mouths, Mat frame, Rect face);
 vector<float> displayNose(Rect nose, Mat frame, Rect face);
 vector<float> displayMouth(Rect mouth, Mat frame, Rect face);
 void displayFace(Mat frame, Rect face);
 void displayProfile(Mat frame, Rect profile);
-vector<Rect> determineBestTwoEyes(vector<Rect> eyes, Rect face);
-Rect determineCorrectEye(vector<Rect> eyes, Rect face);
 Rect determineCorrectNose(vector<Rect> noses, Rect face);
 Rect determineCorrectMouth(vector<Rect> mouths, Rect face);
 Rect getBestFace(vector<Rect> faces, vector<Rect> profiles);
@@ -34,10 +31,15 @@ vector<float> getVariance(vector<Rect> attributes);
 vector<float> getAvgXYCenter(vector<Rect> attributes);
 Rect findSingleBestAttribute(vector<Rect> attributes, float avgX, float avgY, float stndDeviationX, float stndDeviationY, float STD_DEV_CONSTANT);
 Rect getAvgAttribute(vector<Rect> attributes);
-Point getNewCentroid(vector<Rect> associates);
-vector<Rect> doKMeansCluster(vector<Rect> eyes);
-void writeCSV(vector<vector<float>> allFeaturePositions);
 float determineAngle(vector<float> configuration, vector<float> nosePositions, vector<float> mouthPositions);
+void spaceBarPressed();
+void writeConfigFile(vector<float> left, vector<float> mid, vector<float> right, vector<float> down, vector<float> up, float headwidth);
+float getAvg(vector<float> v);
+vector<float> readPoints();
+vector<float> detectNoseAndMouthPositions(Mat frame);
+bool goodSample(vector<float> leftNoseX, vector<float> leftNoseY, vector<float> leftMouthX, vector<float> leftMouthY);
+float detectHeadWidth(Mat frame);
+float getHeadWidth();
 
 /** Global variables */
 
@@ -68,9 +70,8 @@ int main(int argc, const char** argv)
 	if (!nose_cascade.load(nose_cascade_name)) { printf("--(!)Error loading nose cascade\n"); return -1; }
 
 	cout << "Hi. Welcome to the Facial Configuration." << endl;
-	cout << "Please make sure your head is not tilted or leaning back." << endl;
 	
-	cout << "Please turn your head to the left about 60 degrees (or until the neck starts to strain)." << endl;
+	cout << "Please turn your head to the left about 50 degrees (or until the neck starts to strain)." << endl;
 	cout << "When you are ready, press the spacebar." << endl;
 	spaceBarPressed();
 	vector<float> leftPoints = readPoints();
@@ -78,48 +79,60 @@ int main(int argc, const char** argv)
 	cout << "When you are ready, press the spacebar." << endl;
 	spaceBarPressed();
 	vector<float> middlePoints = readPoints();
-	cout << "Great. Middle config was a success. Now, turn your head to the right about 60 degrees (or until the neck strains)." << endl;
+	float headWidth = getHeadWidth();
+	cout << "Great. Middle config was a success. Now, turn your head to the right about 50 degrees (or until the neck strains)." << endl;
 	cout << "When you are ready, press the spacebar." << endl;
 	spaceBarPressed();
 	vector<float> rightPoints = readPoints();
+	cout << "Great. Right config was a success. Now, tilt downwards approximately 30 degrees." << endl;
+	cout << "When you are ready, press the spacebar." << endl;
+	spaceBarPressed();
+	vector<float> downPoints = readPoints();
+	cout << "Great. Down config was a success. Now, tilt you head up about 50 degrees." << endl;
+	cout << "When you are ready, press the spacebar." << endl;
+	spaceBarPressed();
+	vector<float> upPoints = readPoints();
 	cout << "Configuration complete." << endl;
-	writeConfigFile(leftPoints, middlePoints, rightPoints);
-	
+	writeConfigFile(leftPoints, middlePoints, rightPoints, downPoints, upPoints, headWidth);
+
 	return 0;
 }
 
 void spaceBarPressed() {
 	bool pressed = false;
-	int key;
 	while (!pressed) {
-		cin.get(key);
-		if (key == 32) {
+		if (GetAsyncKeyState(VK_SPACE) != 0) {
 			pressed = true;
-			break;
 		}
 	}
 }
 
-writeConfigFile(vector<float> left, vector<float> mid, vector<float> right) {
+void writeConfigFile(vector<float> left, vector<float> mid, vector<float> right, vector<float> down, vector<float> up, float headwidth) {
 	ofstream myFile;
-	myFile.open("C:/Users/Evan/Desktop/config.txt");
-	leftNoseX = left[0]; leftNoseY = left[1]; leftMouthX = left[2];	leftMouthY = left[3];
-	midNoseX = mid[0]; midNoseY = mid[1]; midMouthX = mid[2]; midMouthY = mid[3];
-	rightNoseX = right[0]; rightNoseY = right[1]; rightMouthX = right[2]; rightMouthY = right[3];
+	myFile.open("C:/Users/Evan/Desktop/configuration.txt");
+	float leftNoseX = left[0]; float leftNoseY = left[1]; float leftMouthX = left[2];	float leftMouthY = left[3];
+	float midNoseX = mid[0]; float midNoseY = mid[1]; float midMouthX = mid[2]; float midMouthY = mid[3];
+	float rightNoseX = right[0]; float rightNoseY = right[1]; float rightMouthX = right[2]; float rightMouthY = right[3];
+	float downNoseX = down[0]; float downNoseY = down[1]; float downMouthX = down[2]; float downMouthY = down[3];
+	float upNoseX = up[0]; float upNoseY = up[1]; float upMouthX = up[2]; float upMouthY = up[3];
+	
 	myFile << leftNoseX << " " << leftNoseY << " " << leftMouthX << " " << leftMouthY << endl;
 	myFile << midNoseX << " " << midNoseY << " " << midMouthX << " " << midMouthY << " " << endl;
 	myFile << rightNoseX << " " << rightNoseY << " " << rightMouthX << " " << rightMouthY << endl;
+	myFile << downNoseX << " " << downNoseY << " " << downMouthX << " " << downMouthY << endl;
+	myFile << upNoseX << " " << upNoseY << " " << upMouthX << " " << upMouthY << endl;
+	myFile << headwidth << endl;
 	myFile.close();
 }
 
 vector<float> readPoints() {
-	
+
 	VideoCapture cap(0);
 
 	if (!cap.isOpened()) {
-		return -1;
+		cout << "Can't open the camera!" << endl;
+		return{};
 	}
-	// find left boundary
 	vector<float> NoseX;
 	vector<float> NoseY;
 	vector<float> MouthX;
@@ -127,7 +140,6 @@ vector<float> readPoints() {
 	for (int q = 0; q<10; q++) {
 		Mat frame;
 		cap >> frame;
-		//-- 3. Apply the classifier to the frame
 		if (!frame.empty())
 		{
 			vector<float> framePoints = detectNoseAndMouthPositions(frame);
@@ -144,12 +156,14 @@ vector<float> readPoints() {
 		if ((char)c == 'c') { break; }
 	}
 	if (goodSample(NoseX, NoseY, MouthX, MouthY)) {
+		cout << getAvg(NoseX) << " " << getAvg(NoseY) << " " << getAvg(MouthX) << " " << getAvg(MouthY) << endl;
 		return{ getAvg(NoseX), getAvg(NoseY) ,getAvg(MouthX) ,getAvg(MouthY) };
 	}
 	else {
 		cout << "Sorry. Your readings didn't come in very clear. Let's try it again." << endl;
 		readPoints();
 	}
+	cap.release();
 }
 
 bool goodSample(vector<float> leftNoseX, vector<float> leftNoseY, vector<float> leftMouthX, vector<float> leftMouthY) {
@@ -159,14 +173,51 @@ bool goodSample(vector<float> leftNoseX, vector<float> leftNoseY, vector<float> 
 float getAvg(vector<float> v) {
 	float total = 0.0;
 	for (int i = 0; i < v.size(); i++) {
-		cout <<"-- "<< v[i] << endl;
 		total += v[i];
 	}
 	return total / float(v.size());
 }
 
+float getHeadWidth() {
+	VideoCapture cap(0);
 
-void detectNoseAndMouthPositions(Mat frame)
+	if (!cap.isOpened()) {
+		cout << "Can't open the camera!" << endl;
+		cout << "In headwidth" << endl;
+		return{};
+	}
+	vector<float> hWidths;
+	for (int q = 0; q<3; q++) {
+		Mat frame;
+		cap >> frame;
+		//-- 3. Apply the classifier to the frame
+		if (!frame.empty())
+		{
+			hWidths.push_back(detectHeadWidth(frame));
+		}
+		else
+		{
+			printf(" --(!) No captured frame -- Break!"); break;
+		}
+		int c = waitKey(10);
+		if ((char)c == 'c') { break; }
+	}
+	return getAvg(hWidths);
+}
+
+float detectHeadWidth(Mat frame) {
+	std::vector<Rect> faces;
+	Mat frame_gray;
+
+	cvtColor(frame, frame_gray, CV_BGR2GRAY);
+	equalizeHist(frame_gray, frame_gray);
+
+	//-- Detect faces
+	face_cascade.detectMultiScale(frame_gray, faces, 1.1, 2, 0 | CV_HAAR_SCALE_IMAGE, Size(30, 30));
+	return faces[0].width;
+}
+
+vector<float> detectNoseAndMouthPositions(Mat frame)
 {
 	std::vector<Rect> faces;
 	Mat frame_gray;
@@ -285,21 +336,10 @@ vector<Rect> detectMouths(Mat faceROI, Rect face) {
 
 vector<float> displayNose(Rect nose, Mat frame, Rect face) {
 
-	//cout << "NOSE: " << nose.x/float(face.width) << " " << nose.y/float(face.width)<< endl;
-	// Display the nose
-	//Point nCenter(face.x + nose.x + nose.width / 2, face.y + nose.y + nose.height / 2);
-
-	//ellipse(frame, nCenter, Size(nose.width / 4, nose.height / 4), 0, 0, 360, Scalar(255, 255, 0), 4, 8, 0);
 	return{ nose.x / float(face.width) , nose.y / float(face.height) };
 }
 
 vector<float> displayMouth(Rect mouth, Mat frame, Rect face) {
-	// Display the mouth
-
-	//cout << "MOUTH: " << mouth.x/float(face.width) << " " << mouth.y/float(face.height) << endl;
-	//Point mCenter(face.x + mouth.x + mouth.width / 2, face.y + mouth.y + mouth.height / 2);
-
-	//ellipse(frame, mCenter, Size(mouth.width*0.75, mouth.height / 2), 0, 0, 360, Scalar(0, 255, 0), 4, 8, 0);
 	return{ mouth.x / float(face.width) , mouth.y / float(face.height) };
 }
 
