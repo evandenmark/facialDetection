@@ -9,6 +9,7 @@
 #include <fstream>
 #include <stdio.h>
 #include <math.h>
+#include <algorithm>
 
 using namespace std;
 using namespace cv;
@@ -100,7 +101,7 @@ void detectAndDisplay(Mat frame)
 		cout << "Hey! More than 1 face was detected in the scene." << endl;
 	}
 	//Note: only goes through 1 face here (sometimes nonexistent faces are detected)
-	for (size_t i = 0; i < 1; i++)
+	for (size_t i = 0; i < faces.size(); i++)
 	{
 		vector<float> nosePositions, mouthPositions;
 
@@ -112,12 +113,12 @@ void detectAndDisplay(Mat frame)
 		//detect, filter, and display noses
 		vector<Rect> noses = detectNoses(faceROI, faces[i]);
 		Rect bestNose = determineCorrectNose(noses, faces[i]);
-		nosePositions = displayNose(bestNose, frame, faces[i]);
+		nosePositions = displayNose(bestNose, frame, faces[i]); //normalized to the face ( betweeen 0 and 1)
 
 		//detect, filter, and display mouths
 		vector<Rect> mouths = detectMouths(faceROI, faces[i]);
 		Rect bestMouth = determineCorrectMouth(mouths, faces[i]);
-		mouthPositions = displayMouth(bestMouth, frame, faces[i]);
+		mouthPositions = displayMouth(bestMouth, frame, faces[i]); //normalized to the face
 
 		/*
 		vector<float> configuration{	0.45f, 0.0f,0.4f,0.0f,
@@ -128,6 +129,8 @@ void detectAndDisplay(Mat frame)
 										200.0f };
 		
 		*/
+
+		//NOTE: CONFIG FILE IS BEING PARSED EVERY FRAME
 		vector<float> configuration = parseConfigFile(CONFIG_FILE);
 		
 		//calculate yaw and pitch rotations

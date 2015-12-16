@@ -40,6 +40,7 @@ vector<float> detectNoseAndMouthPositions(Mat frame);
 bool goodSample(vector<float> leftNoseX, vector<float> leftNoseY, vector<float> leftMouthX, vector<float> leftMouthY);
 float detectHeadWidth(Mat frame);
 float getHeadWidth();
+int numZeros(vector<float> v);
 
 /** Global variables */
 
@@ -137,12 +138,17 @@ vector<float> readPoints() {
 	vector<float> NoseY;
 	vector<float> MouthX;
 	vector<float> MouthY;
+	NoseX.reserve(10);
+	NoseY.reserve(10);
+	MouthX.reserve(10);
+	MouthY.reserve(10);
 	for (int q = 0; q<10; q++) {
 		Mat frame;
 		cap >> frame;
 		if (!frame.empty())
 		{
 			vector<float> framePoints = detectNoseAndMouthPositions(frame);
+			
 			NoseX.push_back(framePoints[0]);
 			NoseY.push_back(framePoints[1]);
 			MouthX.push_back(framePoints[2]);
@@ -161,21 +167,48 @@ vector<float> readPoints() {
 	}
 	else {
 		cout << "Sorry. Your readings didn't come in very clear. Let's try it again." << endl;
-		readPoints();
+		cout << "Try rotating your head a little bit less." << endl << endl;
+		cout << "When you are ready, press the spacebar." << endl;
+		spaceBarPressed();
+		cap.release();
+		return readPoints();
 	}
 	cap.release();
 }
 
-bool goodSample(vector<float> leftNoseX, vector<float> leftNoseY, vector<float> leftMouthX, vector<float> leftMouthY) {
+bool goodSample(vector<float> NoseX, vector<float> NoseY, vector<float> MouthX, vector<float> MouthY) {
+	
+	if (numZeros(NoseX) > NoseX.size() / 2 || numZeros(NoseY) > NoseY.size() / 2 ||
+		numZeros(MouthX) > MouthX.size() / 2 || numZeros(MouthY) > NoseY.size() / 2) {
+		//over half of the samples did not find a nose or mouth 
+		return false;
+	}
 	return true;
+}
+
+int numZeros(vector<float> v) {
+	int total = 0;
+	for (int i = 0; i < v.size(); i++) {
+		if (v[i] == 0) {
+			total += 1;
+		}
+	}
+	return total;
 }
 
 float getAvg(vector<float> v) {
 	float total = 0.0;
+	float divisor = 0.0;
 	for (int i = 0; i < v.size(); i++) {
+		if (v[i] != 0) {
+			divisor += 1;
+		}
 		total += v[i];
 	}
-	return total / float(v.size());
+	if (divisor == 0.0) {
+		return 0;
+	}
+	return total / divisor;
 }
 
 float getHeadWidth() {
@@ -183,7 +216,6 @@ float getHeadWidth() {
 
 	if (!cap.isOpened()) {
 		cout << "Can't open the camera!" << endl;
-		cout << "In headwidth" << endl;
 		return{};
 	}
 	vector<float> hWidths;
@@ -233,8 +265,9 @@ vector<float> detectNoseAndMouthPositions(Mat frame)
 	}
 	for (size_t i = 0; i < faces.size(); i++)
 	{
-		vector<float> singleFacePositions, nosePositions, mouthPositions;
-
+		vector<float>  nosePositions, mouthPositions;
+		nosePositions.reserve(2);
+		mouthPositions.reserve(2);
 		Point center(faces[i].x + faces[i].width*0.5, faces[i].y + faces[i].height*0.5);
 		ellipse(frame, center, Size(faces[i].width*0.5, faces[i].height*0.5), 0, 0, 360, Scalar(255, 0, 255), 4, 8, 0);
 
@@ -250,6 +283,7 @@ vector<float> detectNoseAndMouthPositions(Mat frame)
 
 		return{ nosePositions[0], nosePositions[1], mouthPositions[0], mouthPositions[1] };
 	}
+	return{0,0,0,0};
 }
 
 Rect getAvgAttribute(vector<Rect> attributes) {
@@ -269,6 +303,11 @@ Rect getAvgAttribute(vector<Rect> attributes) {
 
 Rect determineCorrectNose(vector<Rect> noses, Rect face) {
 
+	if (noses.size() == 0) {
+		//no nose is found
+		return Rect(0, 0, 0, 0);
+	}
+
 	//get the spatial variance of the mouth locations
 	float varianceX = getVariance(noses)[0];
 	float varianceY = getVariance(noses)[1];
@@ -276,10 +315,6 @@ Rect determineCorrectNose(vector<Rect> noses, Rect face) {
 	float stdDevY = sqrt(varianceY);
 	float avgX = getAvgXYCenter(noses)[0];
 	float avgY = getAvgXYCenter(noses)[1];
-
-	if (noses.size() == 0) {
-		return Rect();
-	}
 
 	//chop off outliers
 	return findSingleBestAttribute(noses, avgX, avgY, stdDevX, stdDevY, NOSE_STANDARD_DEVIATIONS);
@@ -296,6 +331,12 @@ Rect determineCorrectMouth(vector<Rect> mouths, Rect face) {
 			newMouths.push_back(mouths[i]);
 		}
 	}
+
+	if (newMouths.size() == 0) {
+		//no mouth below midpoint of face is found
+		return Rect(0, 0, 0, 0);
+	}
+
 	//get the spatial variance of the mouth locations
 	float varianceX = getVariance(newMouths)[0];
 	float varianceY = getVariance(newMouths)[1];
@@ -304,10 +345,7 @@ Rect determineCorrectMouth(vector<Rect> mouths, Rect face) {
 	float avgX = getAvgXYCenter(newMouths)[0];
 	float avgY = getAvgXYCenter(newMouths)[1];
 
-	if (newMouths.size() == 0) {
-		return Rect();
-	}
-
+	
 	//chop off outliers
 	return findSingleBestAttribute(newMouths, avgX, avgY, stdDevX, stdDevY, MOUTH_STANDARD_DEVIATIONS);
 }
